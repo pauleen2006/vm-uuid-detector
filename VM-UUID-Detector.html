@@ -1,0 +1,1973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IBM ILMT — VM Duplicate Detector</title>
+<style>
+/* ── Reset & Base ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Segoe UI",system-ui,sans-serif;font-size:14px;line-height:1.6;background:#0f0f0f;color:#f4f4f4;min-height:100vh}
+code,pre{font-family:"Consolas","Courier New",monospace}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:#1a1a1a}
+::-webkit-scrollbar-thumb{background:#3d3d3d;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#525252}
+
+/* ── Header ── */
+#app-header{
+  background:linear-gradient(180deg,#0a0a0a 0%,#111 100%);
+  border-bottom:1px solid #2a2a2a;
+  padding:0 1.5rem;
+  height:52px;
+  display:flex;align-items:center;gap:0;
+  position:sticky;top:0;z-index:200;
+}
+#app-header::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;
+  height:1px;background:linear-gradient(90deg,#0f62fe44,#78a9ff88,#0f62fe44);
+}
+.brand{display:flex;align-items:center;gap:.6rem;color:#f4f4f4;font-size:13px;font-weight:600;white-space:nowrap;margin-right:2rem;padding-right:2rem;border-right:1px solid #2a2a2a;flex-shrink:0}
+.brand-icon{width:26px;height:26px;background:linear-gradient(135deg,#0f62fe,#4589ff);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.brand-text{display:flex;flex-direction:column;line-height:1.2}
+.brand-text .brand-top{font-size:10px;color:#78a9ff;font-weight:700;letter-spacing:.8px;text-transform:uppercase}
+.brand-text .brand-bot{font-size:12px;color:#e0e0e0;font-weight:500}
+nav{display:flex;gap:0;height:52px;flex:1}
+nav button{
+  background:none;border:none;
+  border-bottom:2px solid transparent;
+  color:#8d8d8d;cursor:pointer;font-size:12.5px;
+  padding:0 1.1rem;height:100%;
+  transition:color .18s,background .18s,border-color .18s;
+  white-space:nowrap;display:flex;align-items:center;gap:.45rem;
+  font-family:inherit;letter-spacing:.01em;
+}
+nav button:hover{background:#1a1a1a;color:#e0e0e0}
+nav button.active{border-bottom-color:#78a9ff;color:#f4f4f4;background:#181818}
+nav button .nav-num{
+  width:18px;height:18px;border-radius:50%;
+  background:#252525;color:#8d8d8d;font-size:10px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  transition:background .18s,color .18s;
+}
+nav button.active .nav-num{background:#0f62fe;color:#fff}
+nav button:hover .nav-num{background:#353535;color:#f4f4f4}
+
+/* ── Layout ── */
+#content{max-width:1140px;margin:0 auto;padding:2rem 1.5rem}
+.page{display:none;animation:fadeIn .22s ease}.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.page-header{margin-bottom:1.75rem;padding-bottom:1rem;border-bottom:1px solid #222}
+.page-header h1{font-size:24px;font-weight:300;color:#f4f4f4;margin-bottom:.3rem;display:flex;align-items:center;gap:.6rem}
+.page-header h1 .ph-icon{font-size:22px}
+.page-header .page-sub{color:#6f6f6f;font-size:13px;max-width:760px;line-height:1.65}
+h2{font-size:17px;font-weight:500;margin-bottom:.6rem;color:#f4f4f4}
+h3{font-size:14px;font-weight:600;margin-bottom:.5rem;color:#f4f4f4}
+h4{font-size:13px;font-weight:600;margin-bottom:.4rem;color:#e0e0e0}
+p{color:#b0b0b0;margin-bottom:.6rem}
+ul,ol{padding-left:1.3rem;color:#b0b0b0;margin-bottom:.6rem}
+li{margin-bottom:.25rem}
+
+/* ── Cards / Tiles ── */
+.tile{
+  background:#161616;
+  border:1px solid #272727;
+  padding:1.25rem 1.5rem;
+  margin-bottom:1rem;
+  border-radius:6px;
+  transition:border-color .2s;
+}
+.tile:hover{border-color:#333}
+.tile-red{border-left:3px solid #fa4d56}
+.tile-green{border-left:3px solid #42be65}
+.tile-blue{border-left:3px solid #4589ff}
+.tile-yellow{border-left:3px solid #f1c21b}
+.tile-purple{border-left:3px solid #a56eff}
+
+/* ── Grid ── */
+.grid{display:grid;gap:1rem}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:900px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}}
+
+/* ── Buttons ── */
+.btn{
+  display:inline-flex;align-items:center;gap:.45rem;border:none;cursor:pointer;
+  font-size:13px;padding:.5rem 1rem;font-family:inherit;border-radius:4px;
+  font-weight:500;transition:background .16s,transform .1s,box-shadow .16s;
+  letter-spacing:.01em;
+}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:#0f62fe;color:#fff;box-shadow:0 0 0 0 #0f62fe44}
+.btn-primary:hover{background:#0353e9;box-shadow:0 0 12px #0f62fe44}
+.btn-primary:disabled{background:#2a2a2a;color:#4c4c4c;cursor:not-allowed;box-shadow:none;transform:none}
+.btn-ghost{background:transparent;color:#78a9ff;border:1px solid #333}
+.btn-ghost:hover{background:#1a1a1a;border-color:#525252}
+.btn-danger{background:#da1e28;color:#fff}.btn-danger:hover{background:#ba1b23}
+.btn-success{background:#198038;color:#fff}.btn-success:hover{background:#0e6027}
+.btn-sm{padding:.3rem .75rem;font-size:12px}
+
+/* ── Notifications ── */
+.notif{display:flex;gap:.75rem;padding:.875rem 1.1rem;margin-bottom:1rem;border-left:3px solid;border-radius:0 4px 4px 0}
+.notif-info{background:#071d49;border-color:#4589ff;color:#d0e2ff}
+.notif-warn{background:#2d1e00;border-color:#f1c21b;color:#fdd13a}
+.notif-error{background:#1f0508;border-color:#fa4d56;color:#ffd7d9}
+.notif-success{background:#071d10;border-color:#42be65;color:#a7f0ba}
+.notif-title{font-weight:700}
+
+/* ── Tags ── */
+.tag{display:inline-block;padding:2px 9px;font-size:11px;border-radius:20px;font-weight:600;white-space:nowrap;letter-spacing:.02em}
+.tag-red{background:#2d0709;color:#ffd7d9;border:1px solid #fa4d5666}
+.tag-green{background:#071d0f;color:#a7f0ba;border:1px solid #42be6566}
+.tag-blue{background:#071d49;color:#d0e2ff;border:1px solid #4589ff66}
+.tag-gray{background:#222;color:#a8a8a8;border:1px solid #3a3a3a}
+.tag-yellow{background:#2d1e00;color:#fdd13a;border:1px solid #f1c21b66}
+.tag-purple{background:#180d33;color:#d4bbff;border:1px solid #a56eff66}
+
+/* ── Status / data tables ── */
+.status-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:.75rem}
+.status-table th{background:#1e1e1e;padding:.55rem .875rem;text-align:left;color:#9e9e9e;font-weight:600;border-bottom:1px solid #2e2e2e;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px}
+.status-table td{padding:.55rem .875rem;border-bottom:1px solid #1e1e1e;vertical-align:top;transition:background .12s}
+.status-table tbody tr:hover td{background:#1c1c1c}
+.data-table{width:100%;border-collapse:collapse;font-size:12px}
+.data-table th{background:#1e1e1e;padding:.45rem .75rem;text-align:left;color:#8d8d8d;font-weight:600;border-bottom:1px solid #2e2e2e;font-size:11px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.data-table td{padding:.45rem .75rem;border-bottom:1px solid #1a1a1a;vertical-align:top;transition:background .1s}
+.data-table tbody tr:hover td{background:#1c1c1c}
+.data-table tbody tr.dup-row td{background:rgba(250,77,86,.05)}
+.data-table tbody tr.dup-row:hover td{background:rgba(250,77,86,.1)}
+
+/* ── Selects ── */
+select{background:#1a1a1a;border:1px solid #333;color:#f4f4f4;padding:.5rem .875rem;font-size:13px;font-family:inherit;border-radius:4px;cursor:pointer;width:100%;max-width:400px;transition:border-color .16s}
+select:focus{outline:none;border-color:#4589ff;box-shadow:0 0 0 2px #4589ff22}
+label{display:block;font-size:11.5px;color:#6f6f6f;margin-bottom:.35rem;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+
+/* ── Code blocks ── */
+.code-block{
+  position:relative;background:#0d0d0d;border:1px solid #242424;
+  padding:.875rem 3rem .875rem 1rem;font-size:12px;white-space:pre-wrap;
+  word-break:break-all;color:#d4d4d4;margin-bottom:.5rem;line-height:1.6;
+  border-radius:4px;font-family:"Consolas","Courier New",monospace;
+}
+.copy-btn{
+  position:absolute;top:.5rem;right:.5rem;
+  background:#1e1e1e;border:1px solid #333;color:#8d8d8d;
+  cursor:pointer;font-size:11px;padding:3px 9px;border-radius:3px;
+  font-family:inherit;transition:background .15s,color .15s;
+}
+.copy-btn:hover{background:#2e2e2e;color:#f4f4f4}
+
+/* ── File uploader ── */
+.drop-zone{
+  border:2px dashed #303030;padding:1.75rem 1.5rem;text-align:center;
+  cursor:pointer;border-radius:6px;
+  transition:border-color .22s,background .22s,transform .1s;
+  background:#0d0d0d;
+}
+.drop-zone:hover{border-color:#4589ff;background:#071838;transform:translateY(-1px)}
+.drop-zone.drag-over{border-color:#4589ff;background:#071838;transform:scale(1.01)}
+.drop-zone .dz-icon{font-size:30px;margin-bottom:.6rem;display:block;opacity:.7;transition:opacity .2s}
+.drop-zone:hover .dz-icon{opacity:1}
+.drop-zone .dz-text{font-size:12.5px;color:#8d8d8d;margin:0;line-height:1.5}
+.drop-zone .dz-text strong{color:#c0c0c0}
+.drop-zone .dz-hint{font-size:11px;color:#525252;margin-top:.35rem}
+.file-list{margin-top:.5rem}
+.file-item{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:.4rem .75rem;background:#141414;border:1px solid #242424;
+  margin-top:3px;font-size:12px;border-radius:3px;
+  transition:background .12s;
+}
+.file-item:hover{background:#1a1a1a}
+.file-item .fname{color:#e0e0e0;font-weight:500;font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-item .fmeta{color:#525252;font-size:11px;flex-shrink:0;margin:0 .5rem}
+.file-item .fremove{background:none;border:none;color:#525252;cursor:pointer;font-size:14px;padding:0 3px;line-height:1;transition:color .15s;flex-shrink:0}
+.file-item .fremove:hover{color:#fa4d56}
+.slot-card{background:#131313;border:1px solid #242424;border-radius:8px;padding:0;overflow:hidden;transition:border-color .2s,box-shadow .2s}
+.slot-card:hover{border-color:#333;box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.slot-header{padding:.875rem 1.125rem .7rem;border-bottom:1px solid #1e1e1e}
+.slot-header .slot-num{font-size:10px;font-weight:700;color:#525252;text-transform:uppercase;letter-spacing:.8px;margin-bottom:.2rem}
+.slot-header .slot-title{font-size:13px;font-weight:600;color:#e0e0e0;display:flex;align-items:center;gap:.4rem}
+.slot-header .slot-desc{font-size:11px;color:#525252;margin-top:.3rem;line-height:1.5}
+.slot-body{padding:.875rem 1.125rem}
+.slot-card.slot-yellow .slot-header{border-top:2px solid #f1c21b}
+.slot-card.slot-red .slot-header{border-top:2px solid #fa4d56}
+.slot-card.slot-blue .slot-header{border-top:2px solid #4589ff}
+.slot-card.slot-green .slot-header{border-top:2px solid #42be65}
+
+/* ── Accordion ── */
+.accordion-item{border:1px solid #222;margin-bottom:3px;border-radius:4px;overflow:hidden}
+.accordion-header{
+  width:100%;background:#141414;border:none;color:#e0e0e0;cursor:pointer;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:.75rem 1.1rem;font-size:13px;text-align:left;gap:1rem;
+  transition:background .15s;font-family:inherit;
+}
+.accordion-header:hover{background:#1a1a1a}
+.accordion-header.open{background:#181818}
+.accordion-header.open .chevron{transform:rotate(180deg)}
+.chevron{color:#4589ff;font-size:10px;flex-shrink:0;transition:transform .22s}
+.accordion-body{display:none;padding:1rem 1.1rem;background:#0f0f0f;border-top:1px solid #1e1e1e}
+.accordion-body.open{display:block}
+
+/* ── Steps ── */
+.step-item{display:flex;gap:1rem;margin-bottom:1rem;position:relative}
+.step-item:not(:last-child)::before{content:'';position:absolute;left:13px;top:28px;bottom:-10px;width:1px;background:#222}
+.step-num{min-width:28px;height:28px;border-radius:50%;background:#0f62fe;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0;z-index:1;box-shadow:0 0 0 3px #0f0f0f}
+.step-body{flex:1;padding-top:3px}
+
+/* ── Stats ── */
+.stat-tile{
+  background:#131313;border:1px solid #222;padding:1.1rem;
+  text-align:center;border-radius:6px;
+  transition:border-color .2s,transform .15s;cursor:default;
+}
+.stat-tile:hover{border-color:#333;transform:translateY(-1px)}
+.stat-num{font-size:34px;font-weight:200;line-height:1;margin-bottom:.25rem;letter-spacing:-1px}
+.stat-num.red{color:#fa4d56}.stat-num.green{color:#42be65}.stat-num.blue{color:#4589ff}.stat-num.yellow{color:#f1c21b}
+.stat-label{font-size:10.5px;color:#6f6f6f;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+
+/* ── Section headers (analyzer) ── */
+.section-head{
+  display:flex;align-items:center;gap:.75rem;
+  padding:.875rem 1.25rem;
+  background:#141414;border:1px solid #222;border-radius:6px 6px 0 0;
+  cursor:pointer;user-select:none;transition:background .15s;
+}
+.section-head:hover{background:#191919}
+.section-head .sh-title{font-size:14px;font-weight:600;color:#e0e0e0;flex:1}
+.section-head .sh-badge{font-size:11px}
+.section-head .sh-chevron{color:#4589ff;font-size:11px;transition:transform .22s;flex-shrink:0}
+.section-head.open .sh-chevron{transform:rotate(180deg)}
+.section-body{border:1px solid #222;border-top:none;border-radius:0 0 6px 6px;background:#0f0f0f;overflow:hidden;max-height:0;transition:max-height .3s ease}
+.section-body.open{max-height:9999px}
+.section-body-inner{padding:1.1rem 1.25rem}
+.section-wrap{margin-bottom:1rem}
+
+/* ── Search / filter bar ── */
+.filter-bar{display:flex;align-items:center;gap:.6rem;margin-bottom:.75rem}
+.filter-input{
+  flex:1;background:#111;border:1px solid #2e2e2e;color:#f4f4f4;
+  padding:.4rem .75rem;font-size:12.5px;border-radius:4px;font-family:inherit;
+  transition:border-color .15s;
+}
+.filter-input:focus{outline:none;border-color:#4589ff;box-shadow:0 0 0 2px #4589ff1a}
+.filter-input::placeholder{color:#444}
+.filter-count{font-size:11px;color:#525252;white-space:nowrap}
+
+/* ── Misc ── */
+.mono{font-family:"Consolas","Courier New",monospace;font-size:12px}
+.text-muted{color:#6f6f6f}
+.text-red{color:#fa4d56}.text-green{color:#42be65}.text-yellow{color:#f1c21b}
+.mb-1{margin-bottom:.5rem}.mb-2{margin-bottom:1rem}.mb-3{margin-bottom:1.5rem}
+.mt-1{margin-top:.5rem}.mt-2{margin-top:1rem}
+.hidden{display:none!important}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid #2e2e2e;border-top-color:#4589ff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:.4rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+.section-intro{color:#8d8d8d;font-size:13px;max-width:780px;margin-bottom:1.5rem;line-height:1.75}
+hr.divider{border:none;border-top:1px solid #1e1e1e;margin:1.5rem 0}
+.hypervisor-card{background:#0d0d0d;border:1px solid #1e1e1e;padding:.875rem;border-radius:5px;transition:border-color .2s}
+.hypervisor-card:hover{border-color:#2e2e2e}
+
+/* ── Upload action bar ── */
+.upload-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:1rem;flex-wrap:wrap;
+  background:#111;border:1px solid #222;border-radius:6px;
+  padding:1rem 1.25rem;margin-top:1rem;
+}
+.upload-bar-status{display:flex;align-items:center;gap:.6rem;font-size:13px;color:#6f6f6f}
+.upload-bar-status .sb-dot{width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0;transition:background .3s}
+.upload-bar-status .sb-dot.active{background:#42be65;box-shadow:0 0 6px #42be6566}
+
+/* ── Dashboard hero ── */
+.dash-hero{
+  background:linear-gradient(135deg,#0a1628 0%,#0f0f1a 60%,#0a0a0a 100%);
+  border:1px solid #1e2a3a;border-radius:8px;padding:2rem 2rem 1.75rem;
+  margin-bottom:1.5rem;position:relative;overflow:hidden;
+}
+.dash-hero::before{
+  content:'';position:absolute;top:-40px;right:-40px;
+  width:200px;height:200px;border-radius:50%;
+  background:radial-gradient(circle,#0f62fe18 0%,transparent 70%);
+}
+.dash-hero h2{font-size:18px;font-weight:300;color:#d0e2ff;margin-bottom:.5rem}
+.dash-hero p{font-size:13px;color:#6f8fa8;line-height:1.75;margin-bottom:0}
+
+/* ── Workflow steps (dashboard) ── */
+.workflow-steps{display:flex;gap:0;margin:1.5rem 0}
+.wf-step{flex:1;text-align:center;padding:.875rem .5rem;position:relative}
+.wf-step::after{content:'→';position:absolute;right:-8px;top:50%;transform:translateY(-50%);color:#333;font-size:16px;z-index:1}
+.wf-step:last-child::after{display:none}
+.wf-step .wf-num{width:32px;height:32px;border-radius:50%;background:#111;border:1px solid #2e2e2e;color:#4589ff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto .4rem}
+.wf-step .wf-label{font-size:11px;color:#6f6f6f;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.wf-step .wf-page{font-size:12px;color:#a0a0a0;margin-top:.2rem}
+
+/* ── Page-specific breadcrumb ── */
+.breadcrumb{font-size:11px;color:#444;margin-bottom:1.2rem;display:flex;align-items:center;gap:.4rem}
+.breadcrumb span{color:#525252}
+
+/* ── Footer ── */
+#app-footer{border-top:1px solid #1a1a1a;padding:.875rem 1.5rem;text-align:center;font-size:11px;color:#3a3a3a;margin-top:3rem}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<header id="app-header">
+  <div class="brand">
+    <div class="brand-icon">🔍</div>
+    <div class="brand-text">
+      <span class="brand-top">IBM ILMT</span>
+      <span class="brand-bot">VM Duplicate Detector</span>
+    </div>
+  </div>
+  <nav>
+    <button class="active" onclick="showPage('dashboard',this)"><span class="nav-num">1</span>Dashboard</button>
+    <button onclick="showPage('commands',this)"><span class="nav-num">2</span>Commands</button>
+    <button onclick="showPage('uploader',this)"><span class="nav-num">3</span>Uploader</button>
+    <button onclick="showPage('analyzer',this)"><span class="nav-num">4</span>Analyzer</button>
+    <button onclick="showPage('fixer',this)"><span class="nav-num">5</span>Fixer</button>
+  </nav>
+</header>
+
+<main id="content">
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 1 — DASHBOARD
+═══════════════════════════════════════════════════════ -->
+<section id="page-dashboard" class="page active">
+  <div class="page-header">
+    <h1><span class="ph-icon">📊</span>Dashboard</h1>
+    <p class="page-sub">Overview of the VM Duplicate Detector workflow, VM Manager statuses, and key concepts for IBM ILMT UUID deduplication.</p>
+  </div>
+
+  <!-- Hero -->
+  <div class="dash-hero">
+    <h2>What is a UUID duplicate problem?</h2>
+    <p>IBM License Metric Tool (ILMT) identifies virtual machines by their <strong style="color:#d0e2ff">BIOSSerialNumber (UUID)</strong>. When two or more VMs share the same UUID — typically due to cloning, template deployment, or migration without UUID regeneration — ILMT treats them as a single machine. This silently discards VMs from license calculations, causing <strong style="color:#ffd7d9">incorrect software license counts</strong>.</p>
+  </div>
+
+  <!-- Workflow -->
+  <div class="tile mb-3" style="padding:1.25rem 1.5rem .75rem">
+    <h3 style="margin-bottom:.75rem;color:#8d8d8d;font-size:11px;text-transform:uppercase;letter-spacing:.6px">Recommended Workflow</h3>
+    <div class="workflow-steps">
+      <div class="wf-step"><div class="wf-num">2</div><div class="wf-label">Commands</div><div class="wf-page">Run WMI / PowerCLI query on host</div></div>
+      <div class="wf-step"><div class="wf-num">3</div><div class="wf-label">Uploader</div><div class="wf-page">Upload ILMT exports + host output</div></div>
+      <div class="wf-step"><div class="wf-num">4</div><div class="wf-label">Analyzer</div><div class="wf-page">Identify duplicate UUIDs</div></div>
+      <div class="wf-step"><div class="wf-num">5</div><div class="wf-label">Fixer</div><div class="wf-page">Apply remediation commands</div></div>
+    </div>
+  </div>
+
+  <!-- What is VM Manager -->
+  <div class="tile tile-blue mb-3">
+    <h3>What is a VM Manager?</h3>
+    <p style="font-size:13px">A VM Manager is a connection configured in ILMT that scans a hypervisor host or management server to discover all virtual machines and their hardware attributes. ILMT uses the <code>BIOSSerialNumber</code> attribute (also called ILMT UUID) from each VM to uniquely identify it in the license calculation engine.</p>
+    <p style="font-size:13px;margin-bottom:.75rem">VM Manager connections are stored as <code>vmmconf_N.properties</code> files on the ILMT server. Each connection targets one hypervisor endpoint.</p>
+    <div class="grid grid-3 mt-2">
+      <div class="hypervisor-card">
+        <div style="font-size:20px;margin-bottom:.4rem">🖥️</div>
+        <h4>Hyper-V</h4>
+        <p style="font-size:12px;color:#6f6f6f">Connects via WS-Management (WinRM) to enumerate <code>Msvm_VirtualSystemSettingData</code> and retrieve <code>BIOSSerialNumber</code> per VM.</p>
+      </div>
+      <div class="hypervisor-card">
+        <div style="font-size:20px;margin-bottom:.4rem">☁️</div>
+        <h4>VMware vSphere / ESXi</h4>
+        <p style="font-size:12px;color:#6f6f6f">Connects via VMware vSphere API (SOAP/REST) to retrieve the <code>BIOSUuid</code> and <code>InstanceUuid</code> from VM config.</p>
+      </div>
+      <div class="hypervisor-card">
+        <div style="font-size:20px;margin-bottom:.4rem">🗄️</div>
+        <h4>Oracle VM / KVM</h4>
+        <p style="font-size:12px;color:#6f6f6f">Connects via Oracle VM Manager REST API or libvirt to retrieve guest UUIDs assigned at VM creation time.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- VM Manager Statuses -->
+  <div class="tile mb-3">
+    <h3>VM Manager Statuses</h3>
+    <p style="font-size:13px;color:#8d8d8d">Source: IBM License Metric Tool 9.2 — VM Manager Statuses documentation</p>
+    <table class="status-table">
+      <thead>
+        <tr><th>Status</th><th>Severity</th><th>Description &amp; What to Do</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>OK</strong></td>
+          <td><span class="tag tag-green">OK</span></td>
+          <td>The VM Manager connection is working correctly. The last scan completed successfully and data was imported into ILMT without issues.</td>
+        </tr>
+        <tr>
+          <td><strong>OK - duplicated UUIDs discarded</strong></td>
+          <td><span class="tag tag-yellow">WARNING</span></td>
+          <td>The scan succeeded but ILMT detected virtual machines sharing identical BIOSSerialNumber (UUID) values. The duplicate entries were silently dropped from the import. <strong>This is the primary signal that duplicate UUIDs exist on this hypervisor host.</strong> Use the Uploader and Analyzer to identify which VMs are affected, then use the Fixer to resolve.</td>
+        </tr>
+        <tr>
+          <td><strong>Error</strong></td>
+          <td><span class="tag tag-red">ERROR</span></td>
+          <td>The VM Manager scan failed. ILMT could not connect to or authenticate with the hypervisor endpoint. Check network connectivity, credentials, and that the hypervisor management service is running. Review <code>trace.log_vmmconf_N.log</code> for details.</td>
+        </tr>
+        <tr>
+          <td><strong>Connection failed</strong></td>
+          <td><span class="tag tag-red">ERROR</span></td>
+          <td>ILMT could not establish a network connection to the VM Manager endpoint (wrong IP/hostname, firewall blocking port, or service down). Verify the URL in the VM Manager configuration and test connectivity with <code>Test-NetConnection</code> (PowerShell) or <code>telnet</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>Authentication failed</strong></td>
+          <td><span class="tag tag-red">ERROR</span></td>
+          <td>ILMT connected to the endpoint but the credentials (username/password) were rejected. Update the VM Manager credentials in ILMT and ensure the account has sufficient permissions on the hypervisor.</td>
+        </tr>
+        <tr>
+          <td><strong>Never scanned</strong></td>
+          <td><span class="tag tag-gray">INFO</span></td>
+          <td>The VM Manager connection has been configured but has not yet run a scan. Trigger a manual scan from <strong>Manage → VM Managers → Run Now</strong> or wait for the next scheduled scan cycle.</td>
+        </tr>
+        <tr>
+          <td><strong>Pending</strong></td>
+          <td><span class="tag tag-blue">INFO</span></td>
+          <td>A scan has been queued or is currently in progress. Wait for the scan to complete before interpreting results.</td>
+        </tr>
+        <tr>
+          <td><strong>Partial data collected</strong></td>
+          <td><span class="tag tag-yellow">WARNING</span></td>
+          <td>The scan ran but could not retrieve full inventory — some hosts or VMs were unreachable. ILMT imported what it could. Check which hosts returned errors in the trace log and verify those hosts are accessible.</td>
+        </tr>
+        <tr>
+          <td><strong>No VM Manager data</strong></td>
+          <td><span class="tag tag-yellow">WARNING</span></td>
+          <td>A VM was discovered by ILMT (e.g. via agent) but no corresponding VM Manager scan data exists for it. The VM's physical host topology is unknown to ILMT. Configure a VM Manager for that hypervisor host.</td>
+        </tr>
+        <tr>
+          <td><strong>Outdated data</strong></td>
+          <td><span class="tag tag-yellow">WARNING</span></td>
+          <td>The last successful scan was too long ago (beyond the configured data freshness threshold). ILMT may use stale VM inventory. Investigate why recent scans are failing and resolve the underlying connection issue.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="notif notif-warn">
+    <div><span class="notif-title">Key signal: </span>
+    If any VM Manager row shows <code>OK - duplicated UUIDs discarded</code>, go to the
+    <strong>Commands</strong> tab, select your hypervisor type, run the provided query on the affected host,
+    then upload the output to the <strong>Uploader</strong> for analysis.
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 2 — COMMANDS
+═══════════════════════════════════════════════════════ -->
+<section id="page-commands" class="page">
+  <h1>Commands</h1>
+  <p class="section-intro">
+    Select your virtualization technology below. The tool generates the exact commands to run
+    on your hypervisor host to list all VMs and their BIOSSerialNumbers (ILMT UUIDs).
+    Save the output as a <code>.txt</code> file and upload it to the <strong>Uploader</strong>.
+  </p>
+
+  <div class="tile mb-3">
+    <label for="virt-select">Virtualization Technology</label>
+    <select id="virt-select" onchange="showVirtCommands(this.value)">
+      <option value="">— Select type —</option>
+      <option value="hyperv">Microsoft Hyper-V</option>
+      <option value="vmware">VMware ESXi / vSphere / vCenter</option>
+      <option value="kvm">Linux KVM / libvirt</option>
+      <option value="oracle">Oracle VM Manager</option>
+      <option value="azure">Microsoft Azure Stack HCI</option>
+    </select>
+  </div>
+
+  <!-- Hyper-V -->
+  <div id="virt-hyperv" class="virt-panel hidden">
+    <div class="notif notif-info mb-2">
+      <div><span class="notif-title">Run on the Hyper-V host: </span>
+      Open PowerShell as Administrator on the Hyper-V host (not inside a VM). Replace <code>&lt;computername&gt;</code> with the host's name or IP address.
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header open" onclick="toggleAcc(this)">
+        <span>1. List all VMs with BIOSSerialNumber <span class="tag tag-blue" style="margin-left:6px">⭐ Start here</span></span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body open">
+        <p style="font-size:12px;color:#8d8d8d">Primary WMI query — retrieves ElementName (VM display name), VirtualSystemIdentifier, and BIOSSerialNumber (the ILMT UUID) for every VM on the host. Save output with <code>Out-File</code> and upload to Uploader.</p>
+        <div class="code-block" id="hv1">get-wmiobject -Query "SELECT ElementName, VirtualSystemIdentifier, BIOSSerialNumber FROM Msvm_VirtualSystemSettingData" -namespace 'root/Virtualization/V2' -computername &lt;computername&gt;<button class="copy-btn" onclick="cpCmd('hv1')">Copy</button></div>
+        <p style="font-size:12px;color:#8d8d8d;margin-top:.5rem">Save to file:</p>
+        <div class="code-block" id="hv1b">get-wmiobject -Query "SELECT ElementName, VirtualSystemIdentifier, BIOSSerialNumber FROM Msvm_VirtualSystemSettingData" -namespace 'root/Virtualization/V2' -computername &lt;computername&gt; | Out-File "C:\Temp\&lt;computername&gt;-uuids.txt"<button class="copy-btn" onclick="cpCmd('hv1b')">Copy</button></div>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAcc(this)">
+        <span>2. Export to CSV (easier to upload and parse)</span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body">
+        <div class="code-block" id="hv2">get-wmiobject -Query "SELECT ElementName, VirtualSystemIdentifier, BIOSSerialNumber FROM Msvm_VirtualSystemSettingData" `
+  -namespace 'root/Virtualization/V2' `
+  -computername &lt;computername&gt; |
+  Select-Object ElementName, VirtualSystemIdentifier, BIOSSerialNumber |
+  Export-Csv -Path "C:\Temp\&lt;computername&gt;-uuids.csv" -NoTypeInformation<button class="copy-btn" onclick="cpCmd('hv2')">Copy</button></div>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAcc(this)">
+        <span>3. Quick duplicate check — find duplicates directly in PowerShell</span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p style="font-size:12px;color:#8d8d8d">Returns only BIOSSerialNumbers that appear on more than one VM on this host:</p>
+        <div class="code-block" id="hv3">$vms = get-wmiobject -Query "SELECT ElementName, BIOSSerialNumber FROM Msvm_VirtualSystemSettingData" `
+  -namespace 'root/Virtualization/V2' `
+  -computername &lt;computername&gt;
+
+$vms | Group-Object BIOSSerialNumber |
+  Where-Object { $_.Count -gt 1 } |
+  Select-Object Name, Count, @{N='VMs';E={($_.Group.ElementName -join ', ')}} |
+  Format-Table -AutoSize<button class="copy-btn" onclick="cpCmd('hv3')">Copy</button></div>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAcc(this)">
+        <span>4. Scan multiple Hyper-V hosts at once</span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body">
+        <div class="code-block" id="hv4">$hosts = @("HOST01", "HOST02", "HOST03")  # edit this list
+
+$results = foreach ($h in $hosts) {
+  get-wmiobject `
+    -Query "SELECT ElementName, VirtualSystemIdentifier, BIOSSerialNumber FROM Msvm_VirtualSystemSettingData" `
+    -namespace 'root/Virtualization/V2' `
+    -computername $h |
+    Select-Object @{N='Host';E={$h}}, ElementName, VirtualSystemIdentifier, BIOSSerialNumber
+}
+$results | Export-Csv -Path "C:\Temp\all-hosts-uuids.csv" -NoTypeInformation
+Write-Host "Saved to C:\Temp\all-hosts-uuids.csv"<button class="copy-btn" onclick="cpCmd('hv4')">Copy</button></div>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAcc(this)">
+        <span>5. Using Hyper-V PowerShell module (Get-VM)</span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p style="font-size:12px;color:#8d8d8d">Alternative using the Hyper-V module (Windows Server 2012 R2+):</p>
+        <div class="code-block" id="hv5">Get-VM -ComputerName &lt;computername&gt; | ForEach-Object {
+  $vm = $_
+  [PSCustomObject]@{
+    VMName           = $vm.Name
+    State            = $vm.State
+    BIOSSerialNumber = (Get-WmiObject -Namespace 'root/Virtualization/V2' `
+      -Class Msvm_VirtualSystemSettingData `
+      -Filter "ElementName='$($vm.Name)'" `
+      -ComputerName &lt;computername&gt;).BIOSSerialNumber
+  }
+} | Format-Table -AutoSize<button class="copy-btn" onclick="cpCmd('hv5')">Copy</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VMware -->
+  <div id="virt-vmware" class="virt-panel hidden">
+    <div class="notif notif-info mb-2">
+      <div><span class="notif-title">Requires VMware PowerCLI: </span>
+      Install with <code>Install-Module VMware.PowerCLI -Scope CurrentUser</code>. Connect to vCenter or directly to ESXi.
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header open" onclick="toggleAcc(this)">
+        <span>1. List all VMs with BIOS UUID via PowerCLI <span class="tag tag-green" style="margin-left:6px">⭐ Start here</span></span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body open">
+        <div class="code-block" id="vc1">Connect-VIServer -Server &lt;vcenter_or_esxi&gt;
+
+Get-VM | Select-Object Name,
+  @{N='BiosUUID';E={$_.ExtensionData.Config.BIOSUuid}},
+  @{N='InstanceUUID';E={$_.ExtensionData.Config.InstanceUuid}},
+  @{N='Host';E={$_.VMHost.Name}} |
+  Export-Csv -Path "C:\Temp\vmware-uuids.csv" -NoTypeInformation
+Write-Host "Saved to C:\Temp\vmware-uuids.csv"<button class="copy-btn" onclick="cpCmd('vc1')">Copy</button></div>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAcc(this)">
+        <span>2. Find duplicate BIOS UUIDs in VMware</span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body">
+        <div class="code-block" id="vc2">Connect-VIServer -Server &lt;vcenter_or_esxi&gt;
+
+Get-VM |
+  Select-Object Name, @{N='BiosUUID';E={$_.ExtensionData.Config.BIOSUuid}}, @{N='Host';E={$_.VMHost.Name}} |
+  Group-Object BiosUUID |
+  Where-Object { $_.Count -gt 1 } |
+  ForEach-Object {
+    Write-Host "=== DUPLICATE UUID: $($_.Name) ===" -ForegroundColor Red
+    $_.Group | Format-Table Name, Host -AutoSize
+  }<button class="copy-btn" onclick="cpCmd('vc2')">Copy</button></div>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAcc(this)">
+        <span>3. Via ESXi CLI (esxcli / vim-cmd)</span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p style="font-size:12px;color:#8d8d8d">Run directly on ESXi host via SSH:</p>
+        <div class="code-block" id="vc3"># List all registered VMs
+vim-cmd vmsvc/getallvms
+
+# Get config of a specific VM (replace &lt;vmid&gt; with ID from above):
+vim-cmd vmsvc/get.config &lt;vmid&gt; | grep -i uuid
+
+# All VMs with their UUID in one command:
+for vmid in $(vim-cmd vmsvc/getallvms 2>/dev/null | tail -n +2 | awk '{print $1}'); do
+  name=$(vim-cmd vmsvc/get.config $vmid 2>/dev/null | grep 'displayName' | awk -F'"' '{print $2}')
+  uuid=$(vim-cmd vmsvc/get.config $vmid 2>/dev/null | grep 'uuid' | head -1 | awk -F'"' '{print $2}')
+  echo "$uuid  $name"
+done<button class="copy-btn" onclick="cpCmd('vc3')">Copy</button></div>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAcc(this)">
+        <span>4. Instance UUID vs BIOS UUID — what ILMT uses</span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p style="font-size:12px;color:#8d8d8d">VMware VMs have two UUIDs. ILMT uses the <strong>BIOS UUID</strong> (<code>BIOSUuid</code>). The Instance UUID is unique per vCenter inventory item and does not cause ILMT duplicates.</p>
+        <div class="code-block" id="vc4">Connect-VIServer -Server &lt;vcenter_or_esxi&gt;
+
+Get-VM | ForEach-Object {
+  [PSCustomObject]@{
+    Name         = $_.Name
+    BiosUUID     = $_.ExtensionData.Config.BIOSUuid       # ← ILMT uses this
+    InstanceUUID = $_.ExtensionData.Config.InstanceUuid   # ← unique, no ILMT issue
+    Host         = $_.VMHost.Name
+  }
+} | Sort-Object BiosUUID | Format-Table -AutoSize<button class="copy-btn" onclick="cpCmd('vc4')">Copy</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KVM -->
+  <div id="virt-kvm" class="virt-panel hidden">
+    <div class="notif notif-info mb-2">
+      <div><span class="notif-title">Run on the KVM host: </span>
+      Requires <code>libvirt-client</code> (<code>virsh</code>) installed. Run as root or with sudo.
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header open" onclick="toggleAcc(this)">
+        <span>1. List all VMs with UUID <span class="tag tag-purple" style="margin-left:6px">⭐ Start here</span></span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body open">
+        <div class="code-block" id="kv1"># Local host
+virsh list --all --uuid
+
+# Remote host via SSH
+virsh -c qemu+ssh://root@&lt;hostname&gt;/system list --all --uuid
+
+# Save to file
+virsh list --all --uuid > /tmp/$(hostname)-uuids.txt<button class="copy-btn" onclick="cpCmd('kv1')">Copy</button></div>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAcc(this)">
+        <span>2. List all VMs with name and UUID (readable format)</span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body">
+        <div class="code-block" id="kv2">for vm in $(virsh list --all --name); do
+  uuid=$(virsh domuuid "$vm" 2>/dev/null)
+  echo "$uuid  $vm"
+done | sort<button class="copy-btn" onclick="cpCmd('kv2')">Copy</button></div>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAcc(this)">
+        <span>3. Find duplicate UUIDs on Linux KVM host</span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body">
+        <div class="code-block" id="kv3">for vm in $(virsh list --all --name); do
+  uuid=$(virsh domuuid "$vm" 2>/dev/null)
+  echo "$uuid $vm"
+done | sort | awk 'seen[$1]++ { print "DUPLICATE UUID:", $0 }'<button class="copy-btn" onclick="cpCmd('kv3')">Copy</button></div>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAcc(this)">
+        <span>4. Dump full XML config of a VM (shows UUID in BIOS section)</span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body">
+        <div class="code-block" id="kv4">virsh dumpxml &lt;vmname&gt; | grep -A2 -i uuid
+
+# Look for:
+# &lt;uuid&gt;xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx&lt;/uuid&gt;
+# &lt;entry name='manufacturer'&gt;...&lt;/entry&gt;</button><button class="copy-btn" onclick="cpCmd('kv4')">Copy</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Oracle VM -->
+  <div id="virt-oracle" class="virt-panel hidden">
+    <div class="notif notif-info mb-2">
+      <div><span class="notif-title">Oracle VM Manager REST API: </span>
+      Requires Oracle VM Manager credentials. Use the REST API or the OVM CLI tool.
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header open" onclick="toggleAcc(this)">
+        <span>1. List all VMs via Oracle VM REST API <span class="tag tag-yellow" style="margin-left:6px">⭐ Start here</span></span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body open">
+        <div class="code-block" id="ov1"># List all VMs (replace &lt;ovm-host&gt;, &lt;user&gt;, &lt;password&gt;)
+curl -s -u &lt;user&gt;:&lt;password&gt; \
+  "https://&lt;ovm-host&gt;:7002/ovm/core/wsapi/rest/Vm" \
+  -H "Accept: application/json" | python3 -m json.tool
+
+# Extract name and UUID fields:
+curl -s -u &lt;user&gt;:&lt;password&gt; \
+  "https://&lt;ovm-host&gt;:7002/ovm/core/wsapi/rest/Vm" \
+  -H "Accept: application/json" | \
+  python3 -c "import sys,json; vms=json.load(sys.stdin); [print(v.get('id',{}).get('value',''),v.get('name','')) for v in vms]"<button class="copy-btn" onclick="cpCmd('ov1')">Copy</button></div>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAcc(this)">
+        <span>2. List VMs via OVM CLI (ovm_admin.sh)</span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body">
+        <div class="code-block" id="ov2"># Connect to OVM Manager CLI
+ssh root@&lt;ovm-host&gt;
+
+# In OVM CLI:
+/u01/app/oracle/ovm-manager-3/ovm_tools/bin/ovm_admin.sh list Vm<button class="copy-btn" onclick="cpCmd('ov2')">Copy</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Azure Stack HCI -->
+  <div id="virt-azure" class="virt-panel hidden">
+    <div class="notif notif-info mb-2">
+      <div><span class="notif-title">Azure Stack HCI uses Hyper-V underneath: </span>
+      All standard Hyper-V PowerShell commands apply. Use the WMI query below on each cluster node.
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header open" onclick="toggleAcc(this)">
+        <span>1. List all VMs with BIOSSerialNumber on Azure Stack HCI node <span class="tag tag-blue" style="margin-left:6px">⭐ Start here</span></span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body open">
+        <div class="code-block" id="az1">get-wmiobject -Query "SELECT ElementName, VirtualSystemIdentifier, BIOSSerialNumber FROM Msvm_VirtualSystemSettingData" -namespace 'root/Virtualization/V2' -computername &lt;hci-node-name&gt;<button class="copy-btn" onclick="cpCmd('az1')">Copy</button></div>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAcc(this)">
+        <span>2. Scan all nodes in an Azure Stack HCI cluster</span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="accordion-body">
+        <div class="code-block" id="az2"># Get all cluster nodes automatically
+$nodes = (Get-ClusterNode -Cluster &lt;cluster-name&gt;).Name
+
+$results = foreach ($node in $nodes) {
+  get-wmiobject `
+    -Query "SELECT ElementName, VirtualSystemIdentifier, BIOSSerialNumber FROM Msvm_VirtualSystemSettingData" `
+    -namespace 'root/Virtualization/V2' `
+    -computername $node |
+    Select-Object @{N='Node';E={$node}}, ElementName, VirtualSystemIdentifier, BIOSSerialNumber
+}
+$results | Export-Csv -Path "C:\Temp\hci-all-nodes-uuids.csv" -NoTypeInformation<button class="copy-btn" onclick="cpCmd('az2')">Copy</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="virt-placeholder" class="notif notif-info" style="margin-top:1rem">
+    <div>Select a virtualization technology above to see the relevant commands.</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 3 — UPLOADER
+═══════════════════════════════════════════════════════ -->
+<section id="page-uploader" class="page">
+  <div class="page-header">
+    <h1><span class="ph-icon">📤</span>Uploader</h1>
+    <p class="page-sub">Upload the four required file types. Each slot accepts a specific ILMT or hypervisor output file. Once files are loaded, click <strong>Run Analyzer</strong> to proceed.</p>
+  </div>
+
+  <div class="grid grid-2">
+    <!-- Slot 1 -->
+    <div class="slot-card slot-yellow">
+      <div class="slot-header">
+        <div class="slot-num">Slot 1 · Required</div>
+        <div class="slot-title">📋 VM Manager Panel</div>
+        <div class="slot-desc"><code>vm-managers-*.csv</code> — ILMT → Manage → VM Managers → Export. Look for <em>"OK - duplicated UUIDs discarded"</em> rows.</div>
+      </div>
+      <div class="slot-body">
+        <div class="drop-zone" id="dz-vmmanager"
+             onclick="document.getElementById('fi-vmmanager').click()"
+             ondragover="dzOver(event,this)" ondragleave="this.classList.remove('drag-over')"
+             ondrop="dzDrop(event,'vmmanager')">
+          <span class="dz-icon">📄</span>
+          <p class="dz-text"><strong>Click or drag</strong> vm-managers-*.csv here</p>
+          <p class="dz-hint">Accepts: .csv</p>
+        </div>
+        <input type="file" id="fi-vmmanager" accept=".csv" style="display:none" onchange="slotAdd('vmmanager',this.files)">
+        <div id="fl-vmmanager" class="file-list"></div>
+      </div>
+    </div>
+
+    <!-- Slot 2 -->
+    <div class="slot-card slot-red">
+      <div class="slot-header">
+        <div class="slot-num">Slot 2 · Required</div>
+        <div class="slot-title">📜 VM Debug Log</div>
+        <div class="slot-desc"><code>trace.log_vmmconf_*.log</code> — Contains <code>REMOVING DUPLICATED GUEST</code> lines identifying duplicate UUIDs and host names.</div>
+      </div>
+      <div class="slot-body">
+        <div class="drop-zone" id="dz-tracelog"
+             onclick="document.getElementById('fi-tracelog').click()"
+             ondragover="dzOver(event,this)" ondragleave="this.classList.remove('drag-over')"
+             ondrop="dzDrop(event,'tracelog')">
+          <span class="dz-icon">📜</span>
+          <p class="dz-text"><strong>Click or drag</strong> trace.log_vmmconf_*.log here</p>
+          <p class="dz-hint">Accepts: .log, .txt</p>
+        </div>
+        <input type="file" id="fi-tracelog" accept=".log,.txt" style="display:none" onchange="slotAdd('tracelog',this.files)">
+        <div id="fl-tracelog" class="file-list"></div>
+      </div>
+    </div>
+
+    <!-- Slot 3 -->
+    <div class="slot-card slot-blue">
+      <div class="slot-header">
+        <div class="slot-num">Slot 3 · Required</div>
+        <div class="slot-title">🖥️ Computer Panel</div>
+        <div class="slot-desc"><code>computers-*.csv</code> — ILMT → Manage → Computers → Export. Contains <code>Server ID</code> with <code>TLM_VM_&lt;uuid&gt;</code> per virtual machine.</div>
+      </div>
+      <div class="slot-body">
+        <div class="drop-zone" id="dz-computers"
+             onclick="document.getElementById('fi-computers').click()"
+             ondragover="dzOver(event,this)" ondragleave="this.classList.remove('drag-over')"
+             ondrop="dzDrop(event,'computers')">
+          <span class="dz-icon">🖥️</span>
+          <p class="dz-text"><strong>Click or drag</strong> computers-*.csv here</p>
+          <p class="dz-hint">Accepts: .csv</p>
+        </div>
+        <input type="file" id="fi-computers" accept=".csv" style="display:none" onchange="slotAdd('computers',this.files)">
+        <div id="fl-computers" class="file-list"></div>
+      </div>
+    </div>
+
+    <!-- Slot 4 -->
+    <div class="slot-card slot-green">
+      <div class="slot-header">
+        <div class="slot-num">Slot 4 · Up to 10 files</div>
+        <div class="slot-title">🔍 Host VM Output</div>
+        <div class="slot-desc">PowerShell <code>.txt</code> / <code>.csv</code> WMI output from the hypervisor host. Contains <code>BIOSSerialNumber</code> and <code>ElementName</code> per VM.</div>
+      </div>
+      <div class="slot-body">
+        <div class="drop-zone" id="dz-hostoutput"
+             onclick="document.getElementById('fi-hostoutput').click()"
+             ondragover="dzOver(event,this)" ondragleave="this.classList.remove('drag-over')"
+             ondrop="dzDrop(event,'hostoutput')">
+          <span class="dz-icon">🔍</span>
+          <p class="dz-text"><strong>Click or drag</strong> host WMI output here</p>
+          <p class="dz-hint">Accepts: .txt, .csv, .log — up to 10 files</p>
+        </div>
+        <input type="file" id="fi-hostoutput" accept=".txt,.csv,.log" style="display:none" multiple onchange="slotAdd('hostoutput',this.files)">
+        <div id="fl-hostoutput" class="file-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="upload-bar">
+    <div class="upload-bar-status">
+      <div class="sb-dot" id="upload-dot"></div>
+      <span id="upload-status">No files loaded yet.</span>
+    </div>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="clearAllSlots()">✕ Clear All</button>
+      <button class="btn btn-primary" id="run-analyzer-btn" onclick="runAnalyzer()" disabled>
+        ▶ Run Analyzer
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 4 — ANALYZER
+═══════════════════════════════════════════════════════ -->
+<section id="page-analyzer" class="page">
+  <div class="page-header">
+    <h1><span class="ph-icon">🔬</span>Analyzer</h1>
+    <p class="page-sub">Parses all uploaded files, extracts VM records, identifies duplicate UUIDs, and traces root causes. Each section below is collapsible.</p>
+  </div>
+
+  <div id="analyzer-empty" class="notif notif-warn">
+    <div><span class="notif-title">No files loaded — </span>
+    Go to <strong>Uploader</strong>, upload your ILMT files, then click <strong>▶ Run Analyzer</strong>.
+    </div>
+  </div>
+
+  <div id="analyzer-results" class="hidden">
+
+    <!-- ── Summary stats ── -->
+    <div class="grid grid-4 mb-3" id="analyzer-stats"></div>
+
+    <!-- ── Banner ── -->
+    <div id="analyzer-banner" class="mb-3"></div>
+
+    <!-- ══ SECTION A ══ -->
+    <div class="section-wrap">
+      <div class="section-head open" onclick="toggleSection(this)">
+        <span style="font-size:15px">🔴</span>
+        <span class="sh-title" id="dup-log-title">Slot 2 — Trace Log: REMOVING DUPLICATED GUEST Entries</span>
+        <span class="sh-chevron">▼</span>
+      </div>
+      <div class="section-body open">
+        <div class="section-body-inner">
+          <p style="font-size:12px;color:#6f6f6f;margin-bottom:.75rem">Only lines from <code>trace.log_vmmconf_*.log</code> containing <code>REMOVING DUPLICATED GUEST</code>. Each entry shows the UUID ILMT discarded and the host it came from.</p>
+          <div id="dup-log-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ SECTION B ══ -->
+    <div class="section-wrap">
+      <div class="section-head open" onclick="toggleSection(this)">
+        <span style="font-size:15px">🟡</span>
+        <span class="sh-title">Slot 2 vs Slot 4 — UUID Cross-Reference</span>
+        <span class="sh-chevron">▼</span>
+      </div>
+      <div class="section-body open">
+        <div class="section-body-inner">
+          <p style="font-size:12px;color:#6f6f6f;margin-bottom:.75rem">
+            For each duplicate UUID flagged in the trace log (Slot 2), the host WMI output (Slot 4) is searched to identify which VMs share that UUID.
+            <span class="tag tag-red" style="font-size:11px;vertical-align:middle">✓ MATCH</span> = 2+ VMs share this UUID in Slot 4 (on-host duplicates confirmed).
+            <span class="tag tag-yellow" style="font-size:11px;vertical-align:middle">Confirmed</span> = UUID found, but only 1 VM visible in uploaded files.
+          </p>
+          <div class="grid grid-4 mb-2" id="xref-stats"></div>
+          <div class="filter-bar">
+            <input class="filter-input" id="xref-filter" placeholder="Filter by UUID, host or VM name…" oninput="filterTable('xref-tbody','xref-filter','xref-count')">
+            <span class="filter-count" id="xref-count"></span>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table" id="xref-table">
+              <thead><tr>
+                <th>UUID (Slot 2 log)</th>
+                <th>Host (from log)</th>
+                <th>Duplicate VM Names (Slot 4)</th>
+                <th>Slot 4 Source</th>
+                <th style="text-align:center">Match?</th>
+              </tr></thead>
+              <tbody id="xref-tbody"></tbody>
+            </table>
+          </div>
+          <div id="xref-empty" class="hidden" style="margin-top:.75rem">
+            <p style="font-size:12px;color:#6f6f6f">Upload <strong>Slot 2</strong> (trace log) and <strong>Slot 4</strong> (host WMI output) to see this table.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ SECTION C ══ -->
+    <div class="section-wrap">
+      <div class="section-head open" onclick="toggleSection(this)">
+        <span style="font-size:15px">🔴</span>
+        <span class="sh-title">Duplicate = YES</span>
+        <span id="dup-yes-badge" class="tag tag-red sh-badge">0 UUIDs</span>
+        <span class="sh-chevron">▼</span>
+      </div>
+      <div class="section-body open">
+        <div class="section-body-inner">
+          <p style="font-size:12px;color:#6f6f6f;margin-bottom:.75rem">Duplicate UUIDs confirmed in both Slot 2 trace log and Slot 4 host output. These VMs require remediation.</p>
+          <div class="filter-bar">
+            <input class="filter-input" id="dup-yes-filter" placeholder="Filter by UUID, host, VM name or cause…" oninput="filterTable('dup-yes-tbody','dup-yes-filter','dup-yes-count')">
+            <span class="filter-count" id="dup-yes-count"></span>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>BIOSSerialNumber / UUID</th>
+                <th>Host (Slot 2 log)</th>
+                <th>Duplicate VM Names (Slot 4)</th>
+                <th>Slot 4 Source File(s)</th>
+                <th>Likely Cause</th>
+              </tr></thead>
+              <tbody id="dup-yes-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ SECTION D ══ -->
+    <div class="section-wrap">
+      <div class="section-head" onclick="toggleSection(this)">
+        <span style="font-size:15px">🟢</span>
+        <span class="sh-title">Duplicate = NO</span>
+        <span id="dup-no-badge" class="tag tag-green sh-badge">0 VMs</span>
+        <span class="sh-chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <div class="section-body-inner">
+          <p style="font-size:12px;color:#6f6f6f;margin-bottom:.75rem">VMs from Slot 3 (computers CSV) whose UUID was <strong>not</strong> flagged in the Slot 2 trace log — no action required.</p>
+          <div class="filter-bar">
+            <input class="filter-input" id="dup-no-filter" placeholder="Filter by VM name or UUID…" oninput="filterTable('dup-no-tbody','dup-no-filter','dup-no-count')">
+            <span class="filter-count" id="dup-no-count"></span>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>VM Name</th>
+                <th>BIOSSerialNumber / UUID</th>
+                <th>Source File (Slot 3)</th>
+                <th>Line</th>
+              </tr></thead>
+              <tbody id="dup-no-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 5 — FIXER
+═══════════════════════════════════════════════════════ -->
+<section id="page-fixer" class="page">
+  <div class="page-header">
+    <h1><span class="ph-icon">🔧</span>Fixer</h1>
+    <p class="page-sub">Generates the exact commands to fix duplicate UUIDs on your hypervisor. Run the Analyzer first to identify affected VMs, then select your hypervisor type below.</p>
+  </div>
+
+  <div id="fixer-no-results" class="notif notif-warn mb-3">
+    <div><span class="notif-title">Run the Analyzer first: </span>
+    Upload files and run the Analyzer to populate duplicate findings before using the Fixer.
+    </div>
+  </div>
+
+  <div id="fixer-content">
+    <div class="tile mb-3">
+      <label for="fixer-virt-select">Hypervisor type to fix</label>
+      <select id="fixer-virt-select" onchange="showFixerCommands(this.value)" style="margin-bottom:1rem">
+        <option value="">— Select hypervisor —</option>
+        <option value="hyperv">Microsoft Hyper-V</option>
+        <option value="vmware">VMware ESXi / vSphere</option>
+        <option value="kvm">Linux KVM / libvirt</option>
+      </select>
+    </div>
+
+    <!-- Hyper-V Fixer -->
+    <div id="fixer-hyperv" class="fixer-panel hidden">
+      <div class="notif notif-warn mb-3">
+        <div><span class="notif-title">Before you begin: </span>
+        Always snapshot or backup the VM configuration before modifying UUID values. Power off the VM first.
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h4>Identify the affected VM and host from the Analyzer</h4>
+          <p style="font-size:12px">Go to the <strong>Analyzer</strong> tab → expand the duplicate group → note the VM name and Hyper-V host FQDN.</p>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h4>Power off the affected VM</h4>
+          <div class="code-block" id="fx-hv2">Stop-VM -Name "&lt;VM_NAME&gt;" -ComputerName &lt;computername&gt; -Force<button class="copy-btn" onclick="cpCmd('fx-hv2')">Copy</button></div>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h4>Generate a new unique UUID</h4>
+          <div class="code-block" id="fx-hv3">[guid]::NewGuid().ToString().ToUpper()
+# Example: A1B2C3D4-E5F6-7890-ABCD-EF1234567890<button class="copy-btn" onclick="cpCmd('fx-hv3')">Copy</button></div>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">4a</div>
+        <div class="step-body">
+          <h4>Fix — Export and Re-import with new ID <span class="tag tag-green" style="margin-left:6px">Recommended</span></h4>
+          <p style="font-size:12px;color:#8d8d8d">Hyper-V automatically assigns a fresh unique UUID when re-importing with <code>-GenerateNewId</code>.</p>
+          <div class="code-block" id="fx-hv4a"># Export VM
+Export-VM -Name "&lt;VM_NAME&gt;" -Path "C:\Temp\VMExport" -ComputerName &lt;computername&gt;
+
+# Import as new VM with fresh UUID
+Import-VM -Path "C:\Temp\VMExport\&lt;VM_NAME&gt;\Virtual Machines\&lt;config&gt;.vmcx" `
+  -GenerateNewId -ComputerName &lt;computername&gt;<button class="copy-btn" onclick="cpCmd('fx-hv4a')">Copy</button></div>
+          <p style="font-size:11px;color:#8d8d8d;margin-top:.4rem">After re-import: start the new VM, verify it works, then delete the original.</p>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">4b</div>
+        <div class="step-body">
+          <h4>Fix — Set new BIOSSerialNumber via WMI (advanced)</h4>
+          <p style="font-size:12px;color:#8d8d8d">Directly modify the BIOSSerialNumber on the existing VM configuration. Use only if export/re-import is not feasible.</p>
+          <div class="code-block" id="fx-hv4b">$vmName   = "&lt;VM_NAME&gt;"
+$computer = "&lt;computername&gt;"
+$newUUID  = "[guid]::NewGuid().ToString()"  # run separately to get value
+
+# Get VM settings object
+$vmSettings = Get-WmiObject -Namespace 'root/Virtualization/V2' `
+  -Class Msvm_VirtualSystemSettingData `
+  -Filter "ElementName='$vmName'" `
+  -ComputerName $computer
+
+# Modify BIOSSerialNumber
+$vmSettings.BIOSSerialNumber = $newUUID
+
+# Apply via management service
+$mgmtSvc = Get-WmiObject -Namespace 'root/Virtualization/V2' `
+  -Class Msvm_VirtualSystemManagementService `
+  -ComputerName $computer
+$mgmtSvc.ModifySystemSettings($vmSettings.GetText(1))<button class="copy-btn" onclick="cpCmd('fx-hv4b')">Copy</button></div>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <h4>Verify the fix</h4>
+          <div class="code-block" id="fx-hv5">get-wmiobject -Query "SELECT ElementName, BIOSSerialNumber FROM Msvm_VirtualSystemSettingData" `
+  -namespace 'root/Virtualization/V2' `
+  -computername &lt;computername&gt; |
+  Where-Object { $_.BIOSSerialNumber -ne "" } |
+  Select-Object ElementName, BIOSSerialNumber | Sort-Object BIOSSerialNumber<button class="copy-btn" onclick="cpCmd('fx-hv5')">Copy</button></div>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">6</div>
+        <div class="step-body">
+          <h4>Trigger data import in ILMT</h4>
+          <p style="font-size:12px">In ILMT: go to <strong>Management → Data Import → Import Now</strong> to force an immediate data import cycle.</p>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">7</div>
+        <div class="step-body">
+          <h4>Verify VM Manager status</h4>
+          <p style="font-size:12px">Go to <strong>Management → VM Managers</strong> and check the status of the Hyper-V connection. It should no longer show <em>"OK - duplicated UUIDs discarded"</em>. If the status is <em>OK</em>, the duplicate UUID has been resolved.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- VMware Fixer -->
+    <div id="fixer-vmware" class="fixer-panel hidden">
+      <div class="notif notif-warn mb-3">
+        <div><span class="notif-title">Before you begin: </span>
+        Take a VM snapshot before modifying UUID values. Power off the VM first.
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h4>Power off the affected VM</h4>
+          <div class="code-block" id="fx-vc1">Connect-VIServer -Server &lt;vcenter_or_esxi&gt;
+Stop-VM -VM "&lt;VM_NAME&gt;" -Confirm:$false<button class="copy-btn" onclick="cpCmd('fx-vc1')">Copy</button></div>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h4>Edit the .vmx file to assign a new UUID <span class="tag tag-green" style="margin-left:6px">Recommended</span></h4>
+          <p style="font-size:12px;color:#8d8d8d">The BIOS UUID is stored in the <code>.vmx</code> file as <code>uuid.bios</code>. SSH to the ESXi host and edit:</p>
+          <div class="code-block" id="fx-vc2"># Find VM datastore path
+vim-cmd vmsvc/getallvms | grep "&lt;VM_NAME&gt;"
+
+# SSH to ESXi host, then:
+vi /vmfs/volumes/&lt;datastore&gt;/&lt;VM_NAME&gt;/&lt;VM_NAME&gt;.vmx
+
+# Find and change these lines (or remove them — VMware will auto-generate new ones on next power-on):
+# uuid.bios = "xx xx xx xx xx xx xx xx-xx xx xx xx xx xx xx xx"
+# uuid.location = "xx xx xx xx xx xx xx xx-xx xx xx xx xx xx xx xx"
+
+# Save file, then power on the VM
+# VMware will prompt: "I Moved It" or "I Copied It" — select "I Copied It"
+# This forces generation of a new UUID<button class="copy-btn" onclick="cpCmd('fx-vc2')">Copy</button></div>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h4>Set new UUID via PowerCLI</h4>
+          <div class="code-block" id="fx-vc3">Connect-VIServer -Server &lt;vcenter_or_esxi&gt;
+$vm = Get-VM -Name "&lt;VM_NAME&gt;"
+$spec = New-Object VMware.Vim.VirtualMachineConfigSpec
+$spec.uuid = [guid]::NewGuid().ToString()
+$vm.ExtensionData.ReconfigVM($spec)
+Write-Host "New UUID assigned: $($spec.uuid)"<button class="copy-btn" onclick="cpCmd('fx-vc3')">Copy</button></div>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h4>Verify and rescan ILMT</h4>
+          <div class="code-block" id="fx-vc4">Connect-VIServer -Server &lt;vcenter_or_esxi&gt;
+Get-VM -Name "&lt;VM_NAME&gt;" | Select-Object Name, @{N='BiosUUID';E={$_.ExtensionData.Config.BIOSUuid}}<button class="copy-btn" onclick="cpCmd('fx-vc4')">Copy</button></div>
+          <p style="font-size:12px;margin-top:.5rem">Then in ILMT: go to <strong>Management → Data Import → Import Now</strong> to force an import, then check <strong>Management → VM Managers</strong> to confirm the status no longer shows <em>"duplicated UUIDs discarded"</em>.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- KVM Fixer -->
+    <div id="fixer-kvm" class="fixer-panel hidden">
+      <div class="notif notif-warn mb-3">
+        <div><span class="notif-title">Before you begin: </span>
+        Back up the VM XML definition. Power off the VM before editing.
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h4>Power off the affected VM</h4>
+          <div class="code-block" id="fx-kv1">virsh shutdown &lt;vmname&gt;
+# If it doesn't respond:
+virsh destroy &lt;vmname&gt;<button class="copy-btn" onclick="cpCmd('fx-kv1')">Copy</button></div>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h4>Backup and edit the VM XML to assign a new UUID</h4>
+          <div class="code-block" id="fx-kv2"># Backup current XML
+virsh dumpxml &lt;vmname&gt; > /tmp/&lt;vmname&gt;-backup.xml
+
+# Generate a new UUID
+NEW_UUID=$(uuidgen)
+echo "New UUID: $NEW_UUID"
+
+# Edit the XML (change the &lt;uuid&gt; element)
+virsh edit &lt;vmname&gt;
+# In the editor, find: &lt;uuid&gt;old-uuid-here&lt;/uuid&gt;
+# Replace with:       &lt;uuid&gt;$NEW_UUID&lt;/uuid&gt;
+# Save and exit<button class="copy-btn" onclick="cpCmd('fx-kv2')">Copy</button></div>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h4>Start the VM and verify</h4>
+          <div class="code-block" id="fx-kv3">virsh start &lt;vmname&gt;
+virsh domuuid &lt;vmname&gt;<button class="copy-btn" onclick="cpCmd('fx-kv3')">Copy</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer id="app-footer">IBM ILMT VM Duplicate Detector &nbsp;·&nbsp; All processing is local — no data leaves your browser</footer>
+
+<script>
+// ════════════════════════════════════════════════
+// Navigation
+// ════════════════════════════════════════════════
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ════════════════════════════════════════════════
+// Collapsible sections (Analyzer)
+// ════════════════════════════════════════════════
+function toggleSection(head) {
+  head.classList.toggle('open');
+  const body = head.nextElementSibling;
+  body.classList.toggle('open');
+}
+
+// ════════════════════════════════════════════════
+// Table filter
+// ════════════════════════════════════════════════
+function filterTable(tbodyId, inputId, countId) {
+  const q = document.getElementById(inputId).value.toLowerCase().trim();
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  const rows = tbody.querySelectorAll('tr');
+  let vis = 0;
+  rows.forEach(r => {
+    const match = !q || r.textContent.toLowerCase().includes(q);
+    r.style.display = match ? '' : 'none';
+    if (match) vis++;
+  });
+  const countEl = document.getElementById(countId);
+  if (countEl) countEl.textContent = q ? `${vis} of ${rows.length} shown` : `${rows.length} rows`;
+}
+
+function toggleAcc(btn) {
+  btn.classList.toggle('open');
+  btn.nextElementSibling.classList.toggle('open');
+}
+
+// ════════════════════════════════════════════════
+// Copy commands
+// ════════════════════════════════════════════════
+function cpCmd(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const copyBtn = el.querySelector('.copy-btn');
+  const text = Array.from(el.childNodes)
+    .filter(n => n.nodeType === Node.TEXT_NODE)
+    .map(n => n.textContent).join('').trim();
+  const finish = () => {
+    if (copyBtn) { copyBtn.textContent = 'Copied!'; setTimeout(() => copyBtn.textContent = 'Copy', 1500); }
+  };
+  navigator.clipboard.writeText(text).then(finish).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta); finish();
+  });
+}
+
+// ════════════════════════════════════════════════
+// Commands page — virt selector
+// ════════════════════════════════════════════════
+function showVirtCommands(val) {
+  document.querySelectorAll('.virt-panel').forEach(p => p.classList.add('hidden'));
+  document.getElementById('virt-placeholder').classList.add('hidden');
+  if (val) {
+    const panel = document.getElementById('virt-' + val);
+    if (panel) panel.classList.remove('hidden');
+  } else {
+    document.getElementById('virt-placeholder').classList.remove('hidden');
+  }
+}
+
+// ════════════════════════════════════════════════
+// Fixer page — virt selector
+// ════════════════════════════════════════════════
+function showFixerCommands(val) {
+  document.querySelectorAll('.fixer-panel').forEach(p => p.classList.add('hidden'));
+  if (val) {
+    const panel = document.getElementById('fixer-' + val);
+    if (panel) panel.classList.remove('hidden');
+  }
+}
+
+// ════════════════════════════════════════════════
+// Uploader — slot management
+// ════════════════════════════════════════════════
+const slots = { vmmanager: [], tracelog: [], computers: [], hostoutput: [] };
+
+function dzOver(e, el) { e.preventDefault(); el.classList.add('drag-over'); }
+
+function dzDrop(e, slotId) {
+  e.preventDefault();
+  document.getElementById('dz-' + slotId).classList.remove('drag-over');
+  slotAdd(slotId, e.dataTransfer.files);
+}
+
+const SLOT_MAX = { hostoutput: 10 };
+
+function slotAdd(slotId, fileList) {
+  const max = SLOT_MAX[slotId] || 1;
+  const existing = new Set(slots[slotId].map(f => f.name));
+  let skipped = 0;
+  Array.from(fileList).forEach(f => {
+    if (existing.has(f.name)) return;
+    if (slots[slotId].length >= max) { skipped++; return; }
+    slots[slotId].push(f);
+    existing.add(f.name);
+  });
+  if (skipped > 0) alert(`Slot 4 accepts a maximum of ${max} files. ${skipped} file(s) were not added.`);
+  renderSlot(slotId);
+  updateUploaderStatus();
+  const fi = document.getElementById('fi-' + slotId);
+  if (fi) fi.value = '';
+}
+
+function slotRemove(slotId, idx) {
+  slots[slotId].splice(idx, 1);
+  renderSlot(slotId);
+  updateUploaderStatus();
+}
+
+function renderSlot(slotId) {
+  const el = document.getElementById('fl-' + slotId);
+  el.innerHTML = slots[slotId].map((f, i) => `
+    <div class="file-item">
+      <span class="fname">${esc(f.name)}</span>
+      <span class="fmeta">${(f.size/1024).toFixed(1)} KB</span>
+      <button class="fremove" onclick="slotRemove('${slotId}',${i})">✕</button>
+    </div>`).join('');
+}
+
+function updateUploaderStatus() {
+  const counts = Object.values(slots).map(s => s.length);
+  const total = counts.reduce((a,b)=>a+b,0);
+  const filled = counts.filter(c=>c>0).length;
+  const statusEl = document.getElementById('upload-status');
+  const btn = document.getElementById('run-analyzer-btn');
+  if (total === 0) {
+    statusEl.textContent = 'No files loaded yet.';
+    btn.disabled = true;
+    const dot = document.getElementById('upload-dot');
+    if (dot) dot.classList.remove('active');
+  } else {
+    statusEl.textContent = `${total} file${total!==1?'s':''} loaded across ${filled}/4 slot${filled!==1?'s':''}.`;
+    btn.disabled = false;
+    const dot = document.getElementById('upload-dot');
+    if (dot) dot.classList.add('active');
+  }
+}
+
+function clearAllSlots() {
+  Object.keys(slots).forEach(k => { slots[k] = []; renderSlot(k); });
+  updateUploaderStatus();
+}
+
+// ════════════════════════════════════════════════
+// UUID helpers
+// ════════════════════════════════════════════════
+function normalizeUuid(raw) {
+  return raw.trim().replace(/^\{/,'').replace(/\}$/,'').toUpperCase();
+}
+function looksLikeUuid(s) {
+  const t = s.trim();
+  return /^[0-9A-Fa-f]{4,}(?:-[0-9A-Fa-f]{2,}){3,}$/.test(t) && t.replace(/-/g,'').length >= 12;
+}
+
+// ════════════════════════════════════════════════
+// Parsers
+// ════════════════════════════════════════════════
+function parsePsText(content, filename) {
+  const lines = content.split(/\r?\n/), records = [];
+  let cur = {};
+  for (let i = 0; i < lines.length; i++) {
+    const kv = lines[i].match(/^([A-Za-z_]+)\s*:\s*(.*)$/);
+    if (kv) {
+      const k = kv[1].trim().toLowerCase(), v = kv[2].trim();
+      if (k === 'elementname') cur.name = v;
+      if (k.includes('biosserial') && v) cur.uuid = normalizeUuid(v);
+    } else if (!lines[i].trim() && cur.uuid) {
+      records.push({ vmName: cur.name||'unknown', uuid: cur.uuid, source: filename, line: i+1 });
+      cur = {};
+    }
+  }
+  if (cur.uuid) records.push({ vmName: cur.name||'unknown', uuid: cur.uuid, source: filename });
+  return records;
+}
+
+// Handles lines like:
+//   BIOSSerialNumber for this guest (CBJWMDWP01): 8595-3046-2067-3192-7009-6531-74
+//   BIOSSerialNumber for guest [VMNAME] = UUID
+//   BIOSSerialNumber (VMNAME): UUID
+function parsePsGuestLines(content, filename) {
+  const lines = content.split(/\r?\n/), records = [];
+  // Matches: BIOSSerialNumber ... (VMNAME) ...: UUID  or  BIOSSerialNumber ... [VMNAME] ...: UUID
+  const re = /BIOSSerialNumber[^([\r\n]*[\(\[]([^\)\]]+)[\)\]][^:\r\n]*:\s*([0-9A-Fa-f][0-9A-Fa-f\-]{8,})/i;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(re);
+    if (m) {
+      const vmName = m[1].trim();
+      const uuid   = normalizeUuid(m[2].trim());
+      if (looksLikeUuid(uuid)) records.push({ vmName, uuid, source: filename, line: i+1 });
+    }
+  }
+  return records;
+}
+
+function parseCsv(content, filename) {
+  const rows = content.split(/\r?\n/);
+  if (rows.length < 2) return [];
+  const header = csvRow(rows[0]);
+  const uuidCols = ['uuid','biosserialnum','biosserial','computer uuid','server id'];
+  const nameCols = ['name','computer name','elementname','vm name','hostname','computer'];
+  const uuidIdx = header.findIndex(h => uuidCols.some(u => h.toLowerCase().includes(u)));
+  const nameIdx = header.findIndex(h => nameCols.some(n => h.toLowerCase() === n));
+  if (uuidIdx === -1) return [];
+  const records = [];
+  for (let i = 1; i < rows.length; i++) {
+    const cols = csvRow(rows[i]);
+    if (!cols[uuidIdx]) continue;
+    const raw = cols[uuidIdx].replace(/^TLM_VM_/i,'').trim();
+    if (!raw || raw.length < 8 || !looksLikeUuid(raw)) continue;
+    records.push({ vmName: nameIdx!==-1?(cols[nameIdx]||`Row ${i}`):`Row ${i}`, uuid: normalizeUuid(raw), source: filename, line: i+1 });
+  }
+  return records;
+}
+
+function csvRow(row) {
+  const r=[]; let cur='', inQ=false;
+  for (const c of row) {
+    if (c==='"') inQ=!inQ;
+    else if (c===','&&!inQ){r.push(cur.trim());cur='';}
+    else cur+=c;
+  }
+  r.push(cur.trim()); return r;
+}
+
+function parseTraceLog(content, filename) {
+  const records=[], logLines=[], lines=content.split(/\r?\n/);
+  const dupRe=/REMOVING DUPLICATED GUEST:\s*\[\s*uuid:\s*([^\]]+)\]\s*from host:\[\s*uuid:\s*([^\,\]]+)(?:,\s*hostname:\s*([^\]]+))?/i;
+  const biosRe=/BIOSSerialNumber\s*[=:]\s*([0-9A-Fa-f\-]{10,})/i;
+  const nameRe=/(?:ElementName|VMName|Name)\s*[=:]\s*([^\s,;]+)/i;
+  let curName='';
+  for (let i=0;i<lines.length;i++) {
+    const l=lines[i];
+    const dup=l.match(dupRe);
+    if (dup) {
+      const uuid=dup[1].trim(), hostUuid=dup[2].trim(), hostname=dup[3]?dup[3].trim():hostUuid;
+      if (looksLikeUuid(uuid)) {
+        records.push({ vmName:`(dup on ${hostname})`, uuid:normalizeUuid(uuid), source:filename, line:i+1, hyperVHost:hostname });
+        logLines.push({ line:i+1, text:l.trim(), uuid:normalizeUuid(uuid), host:hostname });
+      }
+      continue;
+    }
+    const nm=l.match(nameRe); if(nm) curName=nm[1];
+    const bm=l.match(biosRe);
+    if (bm&&looksLikeUuid(bm[1])) { records.push({vmName:curName||`Line ${i+1}`,uuid:normalizeUuid(bm[1]),source:filename,line:i+1}); curName=''; }
+  }
+  return {records, logLines};
+}
+
+function parseStatusXml(content, filename) {
+  const records=[], configs=[];
+  const vmRe=/<VirtualManager>([\s\S]*?)<\/VirtualManager>/gi;
+  let m;
+  while((m=vmRe.exec(content))!==null) {
+    const block=m[1];
+    const statusM=block.match(/<status>([^<]+)<\/status>/i);
+    const fileM=block.match(/<fileName>([^<]+)<\/fileName>/i);
+    if(statusM&&/duplicated/i.test(statusM[1])) {
+      const conn=fileM?fileM[1]:'unknown';
+      configs.push({ conn, status:statusM[1].trim() });
+      records.push({ vmName:`[${conn}]`, uuid:'STATUS:'+statusM[1].trim(), source:filename });
+    }
+  }
+  return {records, configs};
+}
+
+function parseScanXml(content, filename) {
+  const records=[];
+  const hostRe=/<host_layer>([\s\S]*?)<\/host_layer>/gi;
+  let hm;
+  while((hm=hostRe.exec(content))!==null) {
+    const block=hm[1];
+    const hostNameM=block.match(/<name>([^<]+)<\/name>/i);
+    const hostName=hostNameM?hostNameM[1]:'unknown';
+    const gRe=/<guest_layer>([\s\S]*?)<\/guest_layer>/gi;
+    let gm;
+    while((gm=gRe.exec(block))!==null) {
+      const gb=gm[1];
+      const uM=gb.match(/<uuid>([^<]+)<\/uuid>/i);
+      const nM=gb.match(/<name>([^<]+)<\/name>/i);
+      if(uM&&looksLikeUuid(uM[1])) records.push({vmName:nM?nM[1]:`(on ${hostName})`,uuid:normalizeUuid(uM[1]),source:filename});
+    }
+  }
+  if(records.length===0) {
+    const uRe=/<uuid>([^<]+)<\/uuid>/gi; let um;
+    while((um=uRe.exec(content))!==null) if(looksLikeUuid(um[1])) records.push({vmName:'unknown',uuid:normalizeUuid(um[1]),source:filename});
+  }
+  return records;
+}
+
+function parseFile(content, filename) {
+  const lower=filename.toLowerCase();
+  if(lower.endsWith('.csv')) return {records:parseCsv(content,filename),logLines:[],configs:[]};
+  if(lower.endsWith('.xml')||lower.includes('vmman_scan')) {
+    const r=lower.includes('vmman_scan')?{records:parseScanXml(content,filename)}:parseStatusXml(content,filename);
+    return {records:r.records||[],logLines:[],configs:r.configs||[]};
+  }
+  if(lower.endsWith('.log')||lower.includes('trace')) {
+    const r=parseTraceLog(content,filename); return {records:r.records,logLines:r.logLines,configs:[]};
+  }
+  if(lower.endsWith('.txt')) {
+    // "BIOSSerialNumber for this guest (VMNAME): UUID" single-line format — check first
+    if(/BIOSSerialNumber[^([\r\n]*[\(\[]/i.test(content)) {
+      const r=parsePsGuestLines(content,filename);
+      if(r.length>0) return {records:r,logLines:[],configs:[]};
+    }
+    if(/BIOSSerialNumber\s+:/i.test(content)||/ElementName\s+:/i.test(content)) return {records:parsePsText(content,filename),logLines:[],configs:[]};
+    if(/<VirtualManagers/i.test(content)) { const r=parseStatusXml(content,filename); return {records:r.records,logLines:[],configs:r.configs||[]}; }
+    const csv=parseCsv(content,filename);
+    if(csv.length>0) return {records:csv,logLines:[],configs:[]};
+    const tr=parseTraceLog(content,filename); return {records:tr.records,logLines:tr.logLines,configs:[]};
+  }
+  const csv=parseCsv(content,filename);
+  if(csv.length>0) return {records:csv,logLines:[],configs:[]};
+  const tr=parseTraceLog(content,filename); return {records:tr.records,logLines:tr.logLines,configs:[]};
+}
+
+function detectDuplicates(records) {
+  const map=new Map();
+  records.forEach(r=>{ if(!map.has(r.uuid)) map.set(r.uuid,[]); map.get(r.uuid).push(r); });
+  return [...map.entries()].filter(([,v])=>v.length>1).map(([uuid,vms])=>({uuid,vms})).sort((a,b)=>b.vms.length-a.vms.length);
+}
+
+// ════════════════════════════════════════════════
+// Run Analyzer
+// ════════════════════════════════════════════════
+let analyzerState = null;
+
+async function runAnalyzer() {
+  const allFiles = Object.values(slots).flat();
+  if (allFiles.length === 0) return;
+
+  // switch to analyzer page
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-analyzer').classList.add('active');
+  document.querySelectorAll('nav button')[3].classList.add('active');
+
+  document.getElementById('analyzer-empty').classList.add('hidden');
+  document.getElementById('analyzer-results').classList.add('hidden');
+
+  let allRecords=[], allLogLines=[], allConfigs=[], sourceFiles=[];
+  for (const file of allFiles) {
+    const content = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=rej; r.readAsText(file); });
+    sourceFiles.push(file.name);
+    const parsed=parseFile(content, file.name);
+    allRecords.push(...parsed.records);
+    allLogLines.push(...(parsed.logLines||[]));
+    allConfigs.push(...(parsed.configs||[]));
+  }
+
+  const dupGroups=detectDuplicates(allRecords);
+  const dupeUuids=new Set(dupGroups.map(g=>g.uuid));
+  const uniqueUuids=new Set(allRecords.map(r=>r.uuid)).size;
+
+  analyzerState={allRecords,dupGroups,dupeUuids,allLogLines,allConfigs,sourceFiles};
+
+  // ── Stats ──────────────────────────────────────────────────────
+  const dupVmCount = allRecords.filter(r=>dupeUuids.has(r.uuid)).length;
+  const cleanVmCount = allRecords.filter(r=>!dupeUuids.has(r.uuid)).length;
+  document.getElementById('analyzer-stats').innerHTML=`
+    <div class="stat-tile"><div class="stat-num blue">${allRecords.length}</div><div class="stat-label">Total VM Records</div></div>
+    <div class="stat-tile"><div class="stat-num ${dupGroups.length>0?'red':'green'}">${dupGroups.length}</div><div class="stat-label">Duplicate Groups</div></div>
+    <div class="stat-tile"><div class="stat-num red">${dupVmCount}</div><div class="stat-label">Duplicate = YES</div></div>
+    <div class="stat-tile"><div class="stat-num green">${cleanVmCount}</div><div class="stat-label">Duplicate = NO</div></div>`;
+
+  // ── Banner ─────────────────────────────────────────────────────
+  const banner=document.getElementById('analyzer-banner');
+  if(dupGroups.length>0) {
+    banner.className='notif notif-error';
+    banner.innerHTML=`<div><span class="notif-title">${dupGroups.length} duplicate UUID group(s) — ${dupVmCount} affected VM record(s). </span>Review each section below, then go to the <strong>Fixer</strong> tab for remediation commands.</div>`;
+  } else {
+    banner.className='notif notif-success';
+    banner.innerHTML=`<div><span class="notif-title">✓ No duplicate UUIDs detected </span>across all uploaded files.</div>`;
+  }
+
+  // ── Section A: REMOVING DUPLICATED GUEST log lines only ────────
+  const logEl=document.getElementById('dup-log-list');
+  document.getElementById('dup-log-title').textContent=
+    `Slot 2 — Trace Log: REMOVING DUPLICATED GUEST Entries (${allLogLines.length})`;
+  if(allLogLines.length===0) {
+    logEl.innerHTML=`<p style="font-size:12px;color:#8d8d8d">No <code>REMOVING DUPLICATED GUEST</code> lines found. Upload <strong>trace.log_vmmconf_*.log</strong> in Slot 2.</p>`;
+  } else {
+    // Deduplicate by uuid+host so repeated log lines for the same UUID collapse
+    const seen=new Set();
+    const unique=allLogLines.filter(ll=>{ const k=ll.uuid+'|'+ll.host; if(seen.has(k)) return false; seen.add(k); return true; });
+    logEl.innerHTML=`
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="background:#393939">
+            <th style="padding:.4rem .75rem;text-align:left">Line #</th>
+            <th style="padding:.4rem .75rem;text-align:left">Duplicate UUID (discarded by ILMT)</th>
+            <th style="padding:.4rem .75rem;text-align:left">Host</th>
+            <th style="padding:.4rem .75rem;text-align:left">Raw Log Entry</th>
+          </tr></thead>
+          <tbody>${unique.map(ll=>`
+            <tr style="background:rgba(250,77,86,.07);border-bottom:1px solid #2a2a2a">
+              <td style="padding:.35rem .75rem;color:#8d8d8d;white-space:nowrap">${ll.line}</td>
+              <td style="padding:.35rem .75rem"><code style="font-family:monospace;font-size:11px;color:#fdd13a">${esc(ll.uuid)}</code></td>
+              <td style="padding:.35rem .75rem;color:#78a9ff;font-size:12px">${esc(ll.host)}</td>
+              <td style="padding:.35rem .75rem;color:#8d8d8d;font-size:11px;word-break:break-all;max-width:420px">${esc(ll.text)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  // ── Section B: Slot 2 vs Slot 4 cross-reference ────────────────
+  // slot2UUIDs = UUIDs from trace log lines (allLogLines)
+  // slot4Records = records sourced from hostoutput slot files
+  const slot4FileNames = new Set(slots.hostoutput.map(f=>f.name));
+  const slot4Records   = allRecords.filter(r=>slot4FileNames.has(r.source));
+  const slot4UuidMap   = new Map(); // uuid → [records]
+  slot4Records.forEach(r=>{ if(!slot4UuidMap.has(r.uuid)) slot4UuidMap.set(r.uuid,[]); slot4UuidMap.get(r.uuid).push(r); });
+
+  // Unique log UUIDs (from slot2)
+  const logUuidsSeen=new Set();
+  const logUniqueEntries=allLogLines.filter(ll=>{ if(logUuidsSeen.has(ll.uuid)) return false; logUuidsSeen.add(ll.uuid); return true; });
+
+  const xrefTbody=document.getElementById('xref-tbody');
+  const xrefEmpty=document.getElementById('xref-empty');
+
+  if(logUniqueEntries.length===0 && slot4Records.length===0) {
+    xrefTbody.innerHTML='';
+    xrefEmpty.classList.remove('hidden');
+    document.getElementById('xref-stats').innerHTML='';
+  } else {
+    xrefEmpty.classList.add('hidden');
+    let matchCount=0, confirmedCount=0, noMatchCount=0;
+
+    // Build rows: one row per unique log UUID.
+    // "match" = UUID found on ≥2 VMs in Slot 4 (on-host duplicates visible in uploaded files).
+    // "confirmed" = UUID found on exactly 1 VM in Slot 4 (duplicate exists but other copy not in uploaded files).
+    // "no match" = UUID not present in any Slot 4 file.
+    const rows=logUniqueEntries.map(ll=>{
+      const allSlot4=slot4UuidMap.get(ll.uuid)||[];
+      // Only show VMs that actually come from Slot 4 files (already filtered above)
+      const dupVms=allSlot4; // uuid→[slot4 records]
+
+      if(dupVms.length>=2) {
+        // ≥2 VMs in Slot 4 share this UUID → confirmed on-host duplicates
+        matchCount++;
+        return dupVms.map((m,mi)=>`
+          <tr style="background:rgba(250,77,86,.07);border-bottom:1px solid #2a2a2a">
+            ${mi===0?`<td style="padding:.35rem .75rem" rowspan="${dupVms.length}"><code style="font-family:monospace;font-size:11px;color:#fdd13a">${esc(ll.uuid)}</code></td>
+            <td style="padding:.35rem .75rem;color:#78a9ff;font-size:12px" rowspan="${dupVms.length}">${esc(ll.host)}</td>`:''}
+            <td style="padding:.35rem .75rem;font-weight:600;color:#f4f4f4">${esc(m.vmName)}</td>
+            <td style="padding:.35rem .75rem;color:#8d8d8d;font-size:11px">${esc(m.source)}</td>
+            ${mi===0?`<td style="padding:.35rem .75rem;text-align:center" rowspan="${dupVms.length}"><span class="tag tag-red">✓ MATCH</span></td>`:''}
+          </tr>`).join('');
+      } else if(dupVms.length===1) {
+        // Exactly 1 VM in Slot 4 — UUID confirmed present but the duplicate copy is in another file not yet uploaded
+        confirmedCount++;
+        const m=dupVms[0];
+        return `<tr style="background:rgba(241,194,27,.05);border-bottom:1px solid #2a2a2a">
+          <td style="padding:.35rem .75rem"><code style="font-family:monospace;font-size:11px;color:#fdd13a">${esc(ll.uuid)}</code></td>
+          <td style="padding:.35rem .75rem;color:#78a9ff;font-size:12px">${esc(ll.host)}</td>
+          <td style="padding:.35rem .75rem;color:#f4f4f4">${esc(m.vmName)}</td>
+          <td style="padding:.35rem .75rem;color:#8d8d8d;font-size:11px">${esc(m.source)}</td>
+          <td style="padding:.35rem .75rem;text-align:center"><span class="tag tag-yellow">Confirmed</span></td>
+        </tr>`;
+      } else {
+        // UUID not found in any Slot 4 file
+        noMatchCount++;
+        return `<tr style="border-bottom:1px solid #2a2a2a">
+          <td style="padding:.35rem .75rem"><code style="font-family:monospace;font-size:11px;color:#fdd13a">${esc(ll.uuid)}</code></td>
+          <td style="padding:.35rem .75rem;color:#78a9ff;font-size:12px">${esc(ll.host)}</td>
+          <td style="padding:.35rem .75rem;color:#8d8d8d;font-style:italic">Not found in Slot 4</td>
+          <td style="padding:.35rem .75rem;color:#8d8d8d;font-size:11px">—</td>
+          <td style="padding:.35rem .75rem;text-align:center"><span class="tag tag-gray">No match</span></td>
+        </tr>`;
+      }
+    });
+
+    xrefTbody.innerHTML=rows.join('');
+
+    document.getElementById('xref-stats').innerHTML=`
+      <div class="stat-tile"><div class="stat-num yellow">${logUniqueEntries.length}</div><div class="stat-label">Log UUIDs (Slot 2)</div></div>
+      <div class="stat-tile"><div class="stat-num blue">${slot4Records.length}</div><div class="stat-label">Host VM Records (Slot 4)</div></div>
+      <div class="stat-tile"><div class="stat-num red">${matchCount}</div><div class="stat-label">On-host Duplicates Found</div></div>
+      <div class="stat-tile"><div class="stat-num yellow">${confirmedCount}</div><div class="stat-label">Confirmed (1 copy visible)</div></div>`;
+  }
+
+  // ── Section C: Duplicate = YES ─────────────────────────────────
+  // One row per UUID that is confirmed in BOTH Slot 2 (trace log) AND Slot 4 (host output).
+  // Shows: UUID | host from log | duplicate VM names from Slot 4 | source files | cause
+
+  // Build cause map from dupGroups (which cover all sources)
+  const causeMap = new Map();
+  dupGroups.forEach(g => { causeMap.set(g.uuid, determineCause(g)); });
+
+  // slot2LogUuidMap: uuid → log entry (host info)
+  const slot2LogUuidMap = new Map();
+  allLogLines.forEach(ll => { if(!slot2LogUuidMap.has(ll.uuid)) slot2LogUuidMap.set(ll.uuid, ll); });
+
+  // UUIDs confirmed in BOTH slot 2 log AND slot 4 files
+  const confirmedDupUuids = [...slot2LogUuidMap.keys()].filter(u => slot4UuidMap.has(u));
+
+  document.getElementById('dup-yes-badge').textContent =
+    `${confirmedDupUuids.length} UUID${confirmedDupUuids.length!==1?'s':''}`;
+
+  document.getElementById('dup-yes-tbody').innerHTML = confirmedDupUuids.length === 0
+    ? `<tr><td colspan="5" style="padding:1.5rem;text-align:center;color:#8d8d8d">
+        No UUIDs confirmed in both Slot 2 and Slot 4. Upload the trace log (Slot 2) and host output (Slot 4) to populate this table.
+       </td></tr>`
+    : confirmedDupUuids.map(uuid => {
+        const logEntry  = slot2LogUuidMap.get(uuid);
+        const slot4Vms  = slot4UuidMap.get(uuid) || [];
+        const cause     = causeMap.get(uuid) || {label:'Unknown', tagClass:'tag-gray', reason:''};
+        const vmNames   = slot4Vms.map(v => `<span style="display:inline-block;font-weight:600;color:#f4f4f4;margin-right:.5rem">${esc(v.vmName)}</span>`).join('');
+        const sources   = [...new Set(slot4Vms.map(v => v.source))].map(s => `<div style="font-size:11px;color:#8d8d8d">${esc(s)}</div>`).join('');
+        return `
+        <tr style="background:rgba(250,77,86,.07);border-bottom:1px solid #2a2a2a">
+          <td style="padding:.4rem .75rem"><code style="font-family:monospace;font-size:11px;color:#fdd13a">${esc(uuid)}</code></td>
+          <td style="padding:.4rem .75rem;color:#78a9ff;font-size:12px">${esc(logEntry.host)}</td>
+          <td style="padding:.4rem .75rem">${vmNames}</td>
+          <td style="padding:.4rem .75rem">${sources}</td>
+          <td style="padding:.4rem .75rem">
+            <span class="tag ${cause.tagClass}" title="${esc(cause.reason)}">${esc(cause.label)}</span>
+            <div style="font-size:10px;color:#8d8d8d;margin-top:3px;line-height:1.4;max-width:240px">${esc(cause.reason)}</div>
+          </td>
+        </tr>`;
+      }).join('');
+
+  // ── Section D: Duplicate = NO ──────────────────────────────────
+  // Source: Slot 3 (computers CSV) only.
+  // A VM is "Duplicate = NO" if its UUID is NOT in the Slot 2 trace log confirmed duplicates.
+  const slot3FileNames = new Set(slots.computers.map(f => f.name));
+  const slot2DupUuidSet = new Set(slot2LogUuidMap.keys());
+  const dupNoRows = allRecords.filter(r =>
+    slot3FileNames.has(r.source) && !slot2DupUuidSet.has(r.uuid)
+  );
+  document.getElementById('dup-no-badge').textContent=`${dupNoRows.length} VM${dupNoRows.length!==1?'s':''}`;
+  document.getElementById('dup-no-tbody').innerHTML=dupNoRows.length===0
+    ? `<tr><td colspan="4" style="padding:1.5rem;text-align:center;color:#8d8d8d">No Slot 3 (computers CSV) records loaded, or all UUIDs were flagged as duplicates.</td></tr>`
+    : dupNoRows.map(r=>`
+      <tr style="border-bottom:1px solid #2a2a2a">
+        <td style="padding:.35rem .75rem;color:#f4f4f4">${esc(r.vmName)}</td>
+        <td style="padding:.35rem .75rem"><code style="font-family:monospace;font-size:11px;color:#a7f0ba">${esc(r.uuid)}</code></td>
+        <td style="padding:.35rem .75rem;color:#8d8d8d;font-size:11px">${esc(r.source)}</td>
+        <td style="padding:.35rem .75rem;color:#8d8d8d">${r.line||'—'}</td>
+      </tr>`).join('');
+
+  document.getElementById('analyzer-results').classList.remove('hidden');
+  document.getElementById('fixer-no-results').classList.add('hidden');
+}
+
+function toggleDupGroup(i) {
+  const el=document.getElementById('dup-group-'+i);
+  const header=el.previousElementSibling;
+  const arrow=header.querySelector('span:first-child');
+  const open=el.style.display==='none';
+  el.style.display=open?'block':'none';
+  arrow.textContent=open?'▼':'▶';
+}
+
+function determineCause(group) {
+  const sources  = [...new Set(group.vms.map(v => v.source))];
+  const names    = group.vms.map(v => v.vmName.toLowerCase());
+  const hasLog   = sources.some(s => s.toLowerCase().includes('log'));
+  const hasCsv   = sources.some(s => s.toLowerCase().endsWith('.csv'));
+  const hasTxt   = sources.some(s => s.toLowerCase().endsWith('.txt'));
+  const hostNames= [...new Set(group.vms.filter(v => v.hyperVHost).map(v => v.hyperVHost))];
+  const multiSrc = sources.length > 1;
+  const multiHost= hostNames.length > 1;
+
+  // Clue: names suggest clone/copy pattern (e.g. "vm1" and "vm1-clone", "vm1-copy", "vm1 (1)")
+  const clonePattern = /[-_ ](clone|copy|clon|kopie|\d+)$/i;
+  const looksLikeClone = names.some(n => clonePattern.test(n));
+
+  // Clue: same UUID appears across multiple hypervisor hosts → migration/live-move without UUID regen
+  if (multiHost) {
+    return {
+      label: 'Migration / Move',
+      tagClass: 'tag-yellow',
+      reason: `UUID found on ${hostNames.length} different hosts (${hostNames.join(', ')}). VM was likely live-migrated or moved between hosts without generating a new BIOSSerialNumber.`
+    };
+  }
+
+  // Clue: detected in ILMT trace log with explicit "REMOVING DUPLICATED GUEST"
+  if (hasLog && looksLikeClone) {
+    return {
+      label: 'Clone (ILMT flagged)',
+      tagClass: 'tag-red',
+      reason: 'ILMT trace log explicitly discarded this UUID (REMOVING DUPLICATED GUEST). VM name pattern suggests it is a clone or copy of another VM that inherited the source BIOSSerialNumber.'
+    };
+  }
+  if (hasLog) {
+    return {
+      label: 'ILMT discarded',
+      tagClass: 'tag-red',
+      reason: 'ILMT trace log explicitly flagged this UUID with "REMOVING DUPLICATED GUEST". Most common cause: VM was cloned, copied, or restored from a snapshot/backup without UUID reassignment.'
+    };
+  }
+
+  // Clue: VM names clearly suggest clone/copy
+  if (looksLikeClone) {
+    return {
+      label: 'Clone / Copy',
+      tagClass: 'tag-yellow',
+      reason: 'VM name pattern indicates a clone or copy operation. The cloned VM inherited the original\'s BIOSSerialNumber. Assign a new unique UUID to the clone.'
+    };
+  }
+
+  // Clue: same UUID across multiple source files (e.g. computers.csv + WMI output) — likely template
+  if (multiSrc && hasCsv) {
+    return {
+      label: 'Template deployment',
+      tagClass: 'tag-purple',
+      reason: 'Same UUID detected in both ILMT computer records and host output files. VMs deployed from the same template image without sysprep/UUID regeneration will share the template\'s BIOSSerialNumber.'
+    };
+  }
+
+  // Clue: multiple VMs on the same host share the UUID (WMI text output)
+  if (hasTxt && group.vms.length >= 2) {
+    return {
+      label: 'Clone / Same host',
+      tagClass: 'tag-yellow',
+      reason: 'Multiple VMs on the same host share this BIOSSerialNumber in the WMI output. Likely caused by cloning a VM without running a UUID-regeneration step before powering on the clone.'
+    };
+  }
+
+  // Clue: UUID appears in CSV only (ILMT computers export)
+  if (hasCsv && group.vms.length >= 2) {
+    return {
+      label: 'Template / Clone',
+      tagClass: 'tag-purple',
+      reason: 'Multiple ILMT computer records share the same UUID. Common causes: VM deployed from a shared template, P2V conversion of identical machines, or cloning without UUID reassignment.'
+    };
+  }
+
+  // Fallback
+  return {
+    label: 'Unknown',
+    tagClass: 'tag-gray',
+    reason: 'Multiple VM records share this UUID. Most likely cause is VM cloning or template deployment without generating a new BIOSSerialNumber. Upload trace.log and host WMI output for more detail.'
+  };
+}
+
+// ════════════════════════════════════════════════
+// Helpers
+// ════════════════════════════════════════════════
+function esc(s) {
+  if(!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
